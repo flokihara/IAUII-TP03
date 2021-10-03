@@ -1,1 +1,18 @@
+---
+title: "IAUII-TP03"
+author: "Florencia Kihara"
+date: "03/10/2021"
+---
 
+# **TRABAJO PRÁCTICO 03**
+
+
+Antes de comenzar cargaremos las librerías que vamos a utilizar a lo largo del proyecto.
+
+```{r}
+library(tidyverse)
+library(sf)
+options(scipen=100)
+```
+
+## **PRIMERA PARTE: PREPARANDO NUESTROS DATASETS**
