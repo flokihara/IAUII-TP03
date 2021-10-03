@@ -12,7 +12,348 @@ Antes de comenzar cargaremos las librerías que vamos a utilizar a lo largo del 
 ```{r}
 library(tidyverse)
 library(sf)
+library (ggmap)
+library(modeest)
+library(RColorBrewer)
 options(scipen=100)
+
 ```
 
 ## **PRIMERA PARTE: PREPARANDO NUESTROS DATASETS**
+
+```{r}
+SW <- read.csv("data/sitioswifi.csv",
+               stringsAsFactors = TRUE,
+               encoding = "UTF-8")
+```
+
+
+```{r}
+Filtro1 <- filter(SW, estado %in% c ("Disponible", "Dsiponible"))
+```
+
+```{r}
+Filtro2<-filter(Filtro1,barrio %in% c("La Boca", "Barracas", "Nueva Pompeya", "Villa Riachuelo", "Villa Soldati", "Villa Lugano", "Mataderos") & subcategor== "Polideportivos")
+```
+
+
+Con el objetivo de disponer de la información de utilidad para este análisis y los siguientes, se realiza una selección de las columnas que resultan de interés, con el fin de no considerar "long", "lat", "id", "calle_cruce", codigo_postal", "codigo_postal_argentino" y "objeto". Trabajaremos sobre Filtro1 para estudiar solamente los puntos con wifi disponible en toda la Ciudad.  
+
+```{r}
+Seleccion1 <- select(Filtro1, 4:14, -12)
+```
+
+
+```{r}
+Seleccion2 <- select (SW, where(is.numeric))
+```
+
+A continuación, se listarán las columnas que quedaron dentro de la Selección 2, es decir, que tienen contenido numérico.
+
+```{r}
+names(Seleccion2)
+```
+
+
+Habiendo detectado un error de tipeo en la columna 5 "estado" de la base Selección1, crearemos una nueva columna titulada "estado2" que busca subsanar y homogeneizar el tipeo de la categoría "disponible" para facilitar la manipulación futura de la base. 
+
+```{r}
+Mutacion1 <- mutate(Seleccion1, estado2="DISPONIBLE")
+```
+
+
+Por último, se creará una nueva columna que posea la información conjunta de la Comuna y el barrio donde se encuentra el sitio de wifi.
+
+```{r}
+Mutacion2 <- mutate(Mutacion1, comuna_barrio=paste(comuna, barrio, sep = "_"))
+```
+
+
+Ahora ordenaremos de forma ascendente los registros según su Código Postal. Para ello, utiliaremos el filtro1, con el fin de tener en consideración solamente los sitios con wifi disponible. 
+
+```{r}
+OrdenCP <- arrange(Filtro1, codigo_postal)
+```
+
+Ahora se corroborará el orden establecido.
+
+```{r}
+head(OrdenCP)
+```
+
+
+Ahora, renombraremos algunas columnas de la Selección1 con el fin de esclarecer la información contenida en ellas. 
+
+```{r}
+RenombreS2 <- (rename(Seleccion1, nombre_del_sitio=nombre, subtipo=subcategor))
+```
+
+Corroboraremos el nombre de las columnas
+
+```{r}
+names(RenombreS2)
+```
+Verificamos que las columnas 1. "nombre_del_sitio" y 6. "subtipo" han cambiando su denominación. 
+
+
+
+Se realizará una agrupación de los tipos y subtipos de sitios de wifi sobre RenombreS2 con el fin de observar clasificaciones de los espacios con servicio disponible. 
+
+```{r}
+Grupo1 <- group_by(RenombreS2, tipo, subtipo)
+```
+
+```{r}
+Resumen <- summarise(Grupo1)
+```
+
+
+```{r}
+Concatenar1 <- SW %>%
+  filter(estado %in% c ("Disponible", "Dsiponible")) %>% 
+select(5,6,9,8,13,14) %>% 
+filter(!(tipo %in% c("Gobierno") & subcategor %in% c ("Edificios del GCABA"))) %>% 
+filter(etapa %in% c("Ejecutados 2017", "Gestión previa HRL", "Primera etapa HRL", "Segunda etapa HRL", "Segunda Etapa HRL") & barrio %in% c("La Boca", "Barracas", "Nueva Pompeya", "Villa Riachuelo", "Villa Soldati", "Villa Lugano", "Mataderos")) %>% 
+  arrange(barrio)
+```
+
+
+Con el fin de conocer cuándo fueron instalados los sitios de wifi en el Sur de la Ciudad, se utilizará el proceso summary para la variable etapa.
+
+```{r}
+summary(Concatenar1$etapa)
+```
+De esta forma, se puede observar que la mayoría de los sitios de wifi disponibles en el Sur de la Ciudad fueron instalaron en la gestión previa a la de Horacio Rodríguez Larreta (67). De todos modos, se evidencia avances en la instalación de sitios de wifi durante la segunda etapa de la gestión de Horacio Rodríguez Larreta (27+1=28).
+
+```{r}
+summary(Concatenar1$barrio)
+```
+Con esta información, podemos observar que la cantidad de sitios wifi por cada barrio del Sur de la Ciudad:
+
+- Barracas 23;
+
+- Mataderos 7;
+
+- Villa Lugano 22;
+
+- Villa Riachuelo: 4;
+
+- Nueva Pompeya: 11 y
+
+- Villa Soldati: 28
+
+```{r}
+mfv(Concatenar1$barrio)
+```
+
+```{r}
+mfv(Filtro1$barrio)
+```
+
+
+```{r}
+mfv(Concatenar1$tipo)
+```
+
+```{r}
+mfv(Filtro1$tipo)
+```
+Con este análisis realizado se evidencia que en el Sur de la Ciudad  el tipo de espacio donde hay más sitios de wifi disponible es el "Espacio Público". Mientras que haciendo el mismo análisis para toda la Ciduad (Filtro1), obtenemos que la moda son los Hospitales y los centros de Salud. 
+
+
+En primer lugar, haremos una limpieza de datos, filtrando para no considerar las observaciones vacías en las siguientes variables: "etapa", comuna".
+
+```{r}
+Filtro3 <- filter(Filtro1,!(etapa=="") & !(comuna==""))
+```
+
+Ahora agruparemos los datos que son necesarios para el gráfico.
+
+```{r}
+etapa_agrupada <- group_by(Filtro3, etapa)
+
+```
+
+
+```{r}
+info_g1 <- Filtro3 %>%
+  group_by(etapa, comuna) %>%
+  summarise(cantidad=n()) %>% 
+  arrange(comuna)
+ 
+```
+
+
+```{r fig.height=6, fig.width=15}
+info_g1 <- info_g1 %>% mutate(etapa = toupper(etapa))
+ggplot(data=info_g1 %>% mutate(comuna=fct_relevel(comuna, "Comuna 1", "Comuna 2", "Comuna 3", "Comuna 4", "Comuna 5", "Comuna 6", "Comuna 7", "Comuna 8", "Comuna 9", "Comuna 10", "Comuna 11", "Comuna 12", "Comuna 13", "Comuna 14", "Comuna 15"))) + geom_col(aes(x=comuna, y=cantidad, fill=etapa))+labs(title="Cantidad de Sitios de Wifi disponibles por Comuna", caption=" Fuente: Ba Data", x="Comunas de la Ciudad de Buenos Aires", y="Cantidad de Sitios Wifi disponibles", fill="Etapa de instalación")+
+theme_classic()
+  
+```
+- Como se puede observar, el gráfico obtenido muestra que la Comuna 1 es la que posee mayor cantidad de sitios de wifi disponibles (tal como vimos en la parte 2 del TP) que en su mayoría fueron instalados en etapa "Gestión previa HRL".
+
+
+- Por su parte, en el caso de la Comuna 2, es la que menos sitios de wifi disponibles posee y la mayoría de ellos fueron instalados en la etapa "Gestión previa HRL".
+
+
+- Resulta interesante observar que en la caso de la Comuna 11, el gráfico nos permite ver que en las tres etapas de instalación, se instalaron cantidades similares de sitios de wifi.
+
+
+
+Ahora se hará un gráfico de puntos utilizando los datos de geolocalización (lat, long) del Database, utilizando el Filtro1, ya que de esta manera consideramos los sitios de wifi disponibles.
+
+```{r fig.height=10, fig.width=15}
+info_g2 <- Filtro1 %>% mutate(etapa = toupper(etapa)) 
+
+ggplot(data=Filtro1 %>% mutate(comuna=fct_relevel(comuna, "Comuna 1", "Comuna 2", "Comuna 3", "Comuna 4", "Comuna 5", "Comuna 6", "Comuna 7", "Comuna 8", "Comuna 9", "Comuna 10", "Comuna 11", "Comuna 12", "Comuna 13", "Comuna 14", "Comuna 15"))) + geom_point(aes(x=long, y=lat, color=comuna))+
+labs(title="Sitios de Wifi según latitud y longitud, coloreados por Comuna", caption=" Fuente: Ba Data", x="Longitudes", y="Latitudes", fill="Comuna")
+
+```
+- Este gráfico nos muestra la ubicación de los sitios de wifi disponibles en la Ciudad de Buenos Aires. 
+
+
+- El valor agregado que tiene este gráfico es que nos muestra la ubicación de los puntos que no tenían especificada la Comuna (color salmón)
+
+
+- Podemos ver que hay mayor aglomeración de puntos en el área, que suponemos, abarca la Comuna 1 (coincidente con el gráfico anterior)
+
+
+- Por último, resulta interesante los puntos verde que parecen formar una línea, ya que podemos suponer que coincide con el eje de Cabildo, como concluimos en la primera parte del TP, siendo la categoría de "calle_nombre" que más veces aparece(23).
+
+
+Con el fin de obtener variables numéricas para poder realizar un gráfico, agrupamos pot "tipo", "comuna" y calculamos la cantidad (cantidad2) de sitios de wifi disponibles.
+
+```{r}
+info_g3 <- Filtro3 %>%
+  group_by(tipo, comuna) %>%
+  summarise(cantidad2=n()) %>% 
+  arrange(tipo)
+```
+
+
+```{r fig.width=30}
+ggplot(info_g3 %>% mutate(comuna=fct_relevel(comuna, "Comuna 1", "Comuna 2", "Comuna 3", "Comuna 4", "Comuna 5", "Comuna 6", "Comuna 7", "Comuna 8", "Comuna 9", "Comuna 10", "Comuna 11", "Comuna 12", "Comuna 13", "Comuna 14", "Comuna 15")))+ geom_bar(aes(x=comuna, weight=cantidad2, fill=tipo))+labs(title="3.1- Cantidad de Sitios de Wifi por Comuna, según tipo de sitio", caption=" Fuente: Ba Data", x="Comunas de la Ciudad de Buenos Aires", y="Cantidad de sitios wifi disponibles", fill="Tipos de Sitios de wifi")+
+theme_light()+
+ scale_fill_viridis_d() 
+  
+```
+
+
+```{r fig.width=40, fig.height=20}
+ggplot(info_g3 %>% mutate(comuna=fct_relevel(comuna, "Comuna 1", "Comuna 2", "Comuna 3", "Comuna 4", "Comuna 5", "Comuna 6", "Comuna 7", "Comuna 8", "Comuna 9", "Comuna 10", "Comuna 11", "Comuna 12", "Comuna 13", "Comuna 14", "Comuna 15")))+
+  geom_col(aes(x=tipo, y=cantidad2, fill=tipo), position=position_dodge()) +
+  facet_wrap(comuna~.)+
+  geom_text(aes(x=tipo, y=cantidad2, label=as.integer(cantidad2)), size=4, color="gray14")+
+  labs(title="3.2- Cantidad de tipos de sitios de Wifi disponible, facetado por Comuna",
+       x="Tipo de Sitio",
+       y="Cantidad",
+       fill= "Tipo de sitios",
+       caption="Fuente: Ba Data")+
+theme_light() + 
+  scale_fill_viridis_d()
+
+```
+
+
+```{r fig.width=40, fig.height=20}
+info_g4 <- filter(info_g3, comuna %in% c("Comuna 4", "Comuna 8", "Comuna 9"))
+```
+
+```{r fig.width=40, fig.height=10}
+ggplot(info_g4)+
+  geom_col(aes(x=tipo, y=cantidad2, fill=tipo), position=position_dodge()) +
+  facet_wrap(comuna~.)+
+  geom_text(aes(x=tipo, y=cantidad2, label=as.integer(cantidad2)), size=6, color="gray14")+
+  labs(title="3.3- Cantidad de tipos de sitios de Wifi disponible, facetado por Comunas del Sur de la Ciudad (4,8,9)",
+       x="Tipo de Sitio",
+       y="Cantidad",
+       fill= "Tipo de sitios",
+       caption="Fuente: Ba Data")+
+theme_light() + 
+  scale_fill_viridis_d()
+```
+
+
+- En el primero (3.1) se visualiza la cantidad de sitios de wifi disponibles, según "tipo de sitio", por Comuna. Esta información corrobora nuevamente que la Comuna 1 es la que posee más cantidad de sitios y nos permite ver que el tipo de sitio "area central" sólo se encuentra disponible en esta comuna, dada su ubicación geográfica. Este gráfico dificulta la visualización de tipos de sitios de wifi disponible por Comuna, por lo que desarrollamos el gráfico 3.2.
+
+
+- El gráfico 3.2, a partir del facetado, nos permite ver la cantidad de tipos de sitios de wifi disponibles en cada Comuna.
+
+
+- En el gráfico 3.3 realizamos, siguiendo la idea de la segunda parte del TP, de trabajar con la zona sur de la Ciudad, Comuna 4,8,9, realizamos un filtrado de los datos, para visualizar mejor esta selección. A partir de este gráfico podemos ver como en la Comuna 4 y en la 8, la mayor cantidad de sitios de wifi disponibles, corresponden a "Espacio Público" (Comuna 4=28, Comuna 8 =20), en el caso de la Comuna 9 la categoría que sobresale es la de "Hospitales y centros de salud", 40 unidades.
+
+
+
+```{r}
+pobla_sitios <- read.csv("data/pobla_sitios - copia.csv", stringsAsFactors=TRUE)
+```
+
+```{r}
+nrow(pobla_sitios)
+```
+Tiene 48 filas ya que son 48 los barrios de la Ciudad. 
+
+
+El data set posee dos variables interger (Población y Cantidad de sitios por barrio) que nos servirán para el siguiente gráfico; y otras 3 que son factores. 
+
+
+Ahora intentaremos conocer si la cantidad de sitios de wifi por barrio guarda relación con la cantidad de población que habita en dicho barrio (según datos 2010). Para ello, haremos un gráfico con las siguientes variables:
+
+
+- Eje x (variable independiente): Cantidad de población por barrio.
+
+
+- Eje y (variable dependiente): Cantidad de sitios wifi por barrio
+
+```{r}
+ggplot(pobla_sitios %>% mutate(COMUNA=fct_relevel(COMUNA, "Comuna 1", "Comuna 2", "Comuna 3", "Comuna 4", "Comuna 5", "Comuna 6", "Comuna 7", "Comuna 8", "Comuna 9", "Comuna 10", "Comuna 11", "Comuna 12", "Comuna 13", "Comuna 14", "Comuna 15"))) +
+  geom_point(aes(x=POBLACION, y=CANTIDADSITIOS, color=COMUNA))+
+  labs(title = "¿Cuál es la relación entre ambas variables?",
+       subtitle = "Cantidad de habitantes por barrio - Cantidad de sitios de wifi por barrio",
+       x= "Cantidad de habitantes por barrio",
+       y= "Cantidad de sitios de wifi por barrio",
+       caption="Fuente: Dataset construido a partir de BA Data")+
+  scale_color_manual(values = c("#9e0142","#d53e4f","#f46d43","#fdae61","#f5c710","#fee08b",
+                                "#abdda4","#66c2a5","#00BF7D","#3288bd","#5e4fa2","#542788","#8073ac",
+                                 "#b2abd2","#d8daeb")) + 
+  theme_light()
+```
+
+Este gráfico nos permite observar: 
+
+
+- Hay una gran cantidad de barrios que poseen hasta 75.000 habitantes y hasta 20 sitios de wifi. 
+
+
+- Hay dos barrios que muestran valores extremos en cada una de las variables: Un barrio de la Comuna 14 (que posee más de 225.000 habitantes y 60 sitios de wifi) y un barrio de la Comuna 1 (que posee una población cercana a los 25.000 habitantes pero una gran cantidad de sitios de wifi: más de 75).
+
+
+Ahora haremos el gráfico con etiquetas, para poder identificar a los barrios a simple vista.
+
+```{r}
+ggplot(pobla_sitios%>%
+  mutate(COMUNA=fct_relevel(COMUNA, "Comuna 1", "Comuna 2", "Comuna 3", "Comuna 4", "Comuna 5", "Comuna 6", "Comuna 7", "Comuna 8", "Comuna 9", "Comuna 10", "Comuna 11", "Comuna 12", "Comuna 13", "Comuna 14", "Comuna 15"))) + 
+  geom_label(aes(x=POBLACION, y=CANTIDADSITIOS, color=COMUNA, label=CODIGO_BARRIO))+
+  labs(title = "¿Cuál es la relación entre ambas variables?",
+       subtitle = "Cantidad de habitantes por barrio - Cantidad de sitios de wifi por barrio",
+       x= "Cantidad de habitantes por barrio",
+       y= "Cantidad de sitios de wifi por barrio",
+       caption="Fuente: Dataset construido a partir de BA Data")+
+  scale_color_manual(values = c("#9e0142","#d53e4f","#f46d43","#fdae61","#f5c710","#fee08b",
+                                "#abdda4","#66c2a5","#00BF7D","#3288bd","#5e4fa2","#542788","#8073ac",
+                                 "#b2abd2","#d8daeb")) + 
+  theme_light()
+```
+
+
+
+A partir de este gráfico podemos observar: 
+
+- En cuanto a los dos casos extremos previamente nombrados, podemos ver que se trata de Palermo y de San Nicolás (respectivamente). 
+
+
+- Resulta interesante destacar el caso de Parque Patricios (PPA), un barrio que posee menos de 50.000 habitantes pero más de 40 sitios de wifi. Esta gran cantidad de sitios podría deberse a que en dicho barrios se ubica el Distrito Tecnológico (para corroborar esto, sería necesario hacer otros estudios).
+
+
+- Teniendo en cuenta los casos de Retiro (RET) y Belgrano (BEL), es posible observar que la cantidad de sitios de wifi es similar entre ambos barrios (entre 25 y 35 sitios) pero, su cantidad de población es diferente: mientras que en Retiro hay aproximadamente 60.000 habitantes, en Belgano hay aproximadamente el doble (125.000). De esta forma, podemos ver que estos datos no condicen con nuestra hipótesis inicial (a más población por barrio, más cantidad de sitios web). 
+
